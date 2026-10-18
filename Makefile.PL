@@ -13,9 +13,9 @@ if($^O eq 'darwin') {
 }
 
 WriteMakefile(
-	NAME => 'Geo::Coder::Free::Validate',
-	VERSION_FROM => 'lib/Geo/Coder/Free/Validate.pm',
-	ABSTRACT_FROM => 'lib/Geo/Coder/Free/Validate.pm',
+	NAME => 'Geo::Location::Predicate',
+	VERSION_FROM => 'lib/Geo/Location/Predicate.pm',
+	ABSTRACT_FROM => 'lib/Geo/Location/Predicate.pm',
 	AUTHOR => 'Nigel Horne <njh@nigelhorne.com>',
 	LICENSE => 'GPL',
 	MIN_PERL_VERSION => '5.008',
@@ -29,20 +29,20 @@ WriteMakefile(
 		'Test::Needs' => 0,
 	},
 	dist => $dist,
-	clean => { FILES => 'Geo-Coder-Free-Validate-*' },
+	clean => { FILES => 'Geo-Location-Predicate-*' },
 	META_MERGE => {
 		'meta-spec' => { version => 2 },
 		resources => {
-			homepage => 'https://metacpan.org/pod/Geo::Coder::Free::Validate',
+			homepage => 'https://metacpan.org/pod/Geo::Location::Predicate',
 			repository => {
-				repository => 'https://github.com/nigelhorne/Geo-Coder-Free-Validate',
+				repository => 'https://github.com/nigelhorne/Geo-Location-Predicate',
 				type => 'git',
-				url => 'git://github.com/nigelhorne/Geo-Coder-Free-Validate.git',
-				web => 'https://github.com/nigelhorne/Geo-Coder-Free-Validate',
+				url => 'git://github.com/nigelhorne/Geo-Location-Predicate.git',
+				web => 'https://github.com/nigelhorne/Geo-Location-Predicate',
 			}, bugtracker => {
-				mailto => 'bug-Geo-Coder-Free-Validate@rt.cpan.org',
-				web => 'https://rt.cpan.org/Public/Dist/Display.html?Name=Geo-Coder-Free-Validate',
-				url => 'https://rt.cpan.org/Public/Dist/Display.html?Name=Geo-Coder-Free-Validate',
+				mailto => 'bug-Geo-Location-Predicate@rt.cpan.org',
+				web => 'https://rt.cpan.org/Public/Dist/Display.html?Name=Geo-Location-Predicate',
+				url => 'https://rt.cpan.org/Public/Dist/Display.html?Name=Geo-Location-Predicate',
 			}
 		},
 	},

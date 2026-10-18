@@ -6,9 +6,9 @@ use warnings;
 use Test::Most tests => 2;
 
 BEGIN {
-	use_ok('Geo::Coder::Free::Validate') or BAIL_OUT('Geo::Coder::Free::Validate failed to load');
+	use_ok('Geo::Location::Predicate') or BAIL_OUT('Geo::Location::Predicate failed to load');
 }
 
-require_ok('Geo::Coder::Free::Validate');
+require_ok('Geo::Location::Predicate');
 
-diag("Testing Geo::Coder::Free::Validate $Geo::Coder::Free::Validate::VERSION, Perl $], $^X");
+diag("Testing Geo::Location::Predicate $Geo::Location::Predicate::VERSION, Perl $], $^X");

@@ -2,7 +2,7 @@
 
 # The rule, by equivalence class.
 #
-# Geo::Coder::Free::Validate answers one question - could this string be a
+# Geo::Location::Predicate answers one question - could this string be a
 # location at all? - and its answer is a cheap syntactic test: true for anything
 # with a non-digit character in it, false for undef, the empty string, a
 # reference and a string of digits only.  What it is for is the string a numeric
@@ -23,7 +23,7 @@ use warnings;
 use Scalar::Util qw(refaddr);
 use Test::Most;
 
-use Geo::Coder::Free::Validate qw(_valid_location);
+use Geo::Location::Predicate qw(_valid_location);
 
 # Values that are not a location.  Held as pairs so a case cannot be confused
 # with the assertion it feeds: '0' and 0 are different questions.
@@ -40,7 +40,7 @@ my @NOT_A_LOCATION = (
 	['a reference to an array',          [1, 2, 3]],
 	['a reference to a hash',            { location => 'London' }],
 	['a reference to a scalar',          \'London'],
-	['a blessed reference',              bless({}, 'Geo::Coder::Free::Validate::Test::Thing')],
+	['a blessed reference',              bless({}, 'Geo::Location::Predicate::Test::Thing')],
 );
 
 # Values that could be.  A true answer means the string is not disqualified, not
@@ -69,13 +69,13 @@ for my $case (@A_LOCATION) {
 # The private name is the only one, and asking for it is how a caller gets it:
 # a module that exported the rule by default would put it into a caller's
 # namespace unasked.
-is_deeply(\@Geo::Coder::Free::Validate::EXPORT, [], 'the rule is not exported by default');
-is_deeply(\@Geo::Coder::Free::Validate::EXPORT_OK, ['_valid_location'],
+is_deeply(\@Geo::Location::Predicate::EXPORT, [], 'the rule is not exported by default');
+is_deeply(\@Geo::Location::Predicate::EXPORT_OK, ['_valid_location'],
 	'it is available on request, under the name the callers use');
 
 # The import is that sub, not a copy of it: a module that pasted the rule into
 # its caller would answer the same and could still drift from this one.
-is(refaddr(\&main::_valid_location), refaddr(\&Geo::Coder::Free::Validate::_valid_location),
+is(refaddr(\&main::_valid_location), refaddr(\&Geo::Location::Predicate::_valid_location),
 	'the imported name and the module\'s sub are the same code reference');
 
 done_testing();

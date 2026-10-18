@@ -1,10 +1,11 @@
 Changes
+cpanfile
+lib/Geo/Location/Predicate.pm
 LICENSE
 Makefile.PL
 MANIFEST
 MANIFEST.SKIP
 README.md
-lib/Geo/Coder/Free/Validate.pm
 t/00-load.t
 t/manifest.t
 t/pod.t

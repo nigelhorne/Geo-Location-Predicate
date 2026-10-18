@@ -8,4 +8,4 @@ use Test::Needs 'Test::Strict';
 
 Test::Strict->import();
 all_perl_files_ok();
-warnings_ok('lib/Geo/Coder/Free/Validate.pm');
+warnings_ok('lib/Geo/Location/Predicate.pm');

@@ -1,0 +1,163 @@
+---
+# A change to the rule, fuzzed against the six geocoders that ask it.
+#
+# The rule is this distribution: Geo::Location::Predicate::_valid_location().
+# Six sibling geocoders - Geo::Coder::CA, ::DataScienceToolkit, ::GeoApify,
+# ::List, ::Postcodes and ::XYZ - ask it from their geocode(), Geo::Coder::Free
+# asks it of a location, of a scantext and of what a caller hands its MaxMind and
+# OpenAddresses backends, and it is one file that all seven of them read.
+#
+# Geo-Coder-Free carries the same job
+# (.github/workflows/location-predicates.yml) on a schedule, a push and a pull
+# request, and that is what catches a sibling which has drifted from the rule.  It
+# cannot catch a change to the rule itself: a change to the rule is a pull request
+# here, and a workflow only runs in the repository its event happened in.  So this
+# file is the other half - on a pull request, the rule in the branch is fuzzed
+# against the six before it merges, rather than being caught by the daily run of
+# another repository after it has.
+#
+# scripts/location-predicate-fuzz.pl is Geo-Coder-Free's harness, so that checkout
+# is assembled here too, at its default branch: what is under test in a pull
+# request to this distribution is the rule, not the harness.  The harness is run
+# the way it documents - a sibling's verdict on a scalar or undef that differs
+# from the rule's fails the run and names the class or the value, a reference
+# disagreement is reported without failing it - and it puts the eight checkouts'
+# lib/ on @INC itself, which is how the rule in the branch is the one that answers
+# instead of the released copy; it fails rather than run if that is not the copy
+# that loaded.
+name: Location predicates
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    name: The rule under test against the six, on Perl 5.40
+    steps:
+      - name: Check out this distribution at the commit under test
+        uses: actions/checkout@v7
+        with:
+          path: workspace/Geo-Location-Predicate
+
+      - name: Check out Geo-Coder-Free for the harness
+        uses: actions/checkout@v7
+        with:
+          repository: nigelhorne/Geo-Coder-Free
+          path: workspace/Geo-Coder-Free
+          # The default token reads public repositories; set WORKSPACE_TOKEN
+          # only if one of these checkouts is private.
+          token: ${{ secrets.WORKSPACE_TOKEN || github.token }}
+
+      - name: Check out Geo-Coder-CA
+        uses: actions/checkout@v7
+        with:
+          repository: nigelhorne/Geo-Coder-CA
+          path: workspace/Geo-Coder-CA
+          token: ${{ secrets.WORKSPACE_TOKEN || github.token }}
+
+      - name: Check out Geo-Coder-DataScienceToolkit
+        uses: actions/checkout@v7
+        with:
+          repository: nigelhorne/Geo-Coder-DataScienceToolkit
+          path: workspace/Geo-Coder-DataScienceToolkit
+          token: ${{ secrets.WORKSPACE_TOKEN || github.token }}
+
+      - name: Check out Geo-Coder-GeoApify
+        uses: actions/checkout@v7
+        with:
+          repository: nigelhorne/Geo-Coder-GeoApify
+          path: workspace/Geo-Coder-GeoApify
+          token: ${{ secrets.WORKSPACE_TOKEN || github.token }}
+
+      - name: Check out Geo-Coder-List
+        uses: actions/checkout@v7
+        with:
+          repository: nigelhorne/Geo-Coder-List
+          path: workspace/Geo-Coder-List
+          token: ${{ secrets.WORKSPACE_TOKEN || github.token }}
+
+      - name: Check out Geo-Coder-Postcodes
+        uses: actions/checkout@v7
+        with:
+          repository: nigelhorne/Geo-Coder-Postcodes
+          path: workspace/Geo-Coder-Postcodes
+          token: ${{ secrets.WORKSPACE_TOKEN || github.token }}
+
+      - name: Check out Geo-Coder-XYZ
+        uses: actions/checkout@v7
+        with:
+          repository: nigelhorne/Geo-Coder-XYZ
+          path: workspace/Geo-Coder-XYZ
+          token: ${{ secrets.WORKSPACE_TOKEN || github.token }}
+
+      # The harness says which checkout is missing, but only after the job has
+      # spent time on it; this says it first, and a checkout that silently failed
+      # would otherwise look like a fuzz that found nothing.
+      - name: Check that the workspace is there
+        shell: bash
+        run: |
+          set -eu
+          for dist in Geo-Coder-Free Geo-Location-Predicate Geo-Coder-CA \
+            Geo-Coder-DataScienceToolkit Geo-Coder-GeoApify Geo-Coder-List \
+            Geo-Coder-Postcodes Geo-Coder-XYZ; do
+            if [ ! -d "workspace/$dist/lib" ]; then
+              echo "::error::workspace/$dist was not checked out"
+              exit 1
+            fi
+          done
+          ls -1 workspace
+
+      - name: Setup Perl
+        uses: shogo82148/actions-setup-perl@v1.44.0
+        with:
+          perl-version: '5.40'
+
+      # What the six modules load.  Their declared prerequisites are not installed
+      # here: each of them recommends Geo::Location::Predicate, and a release of
+      # it would be a copy the run is not grading - the harness refuses to grade
+      # one, but the job should not hand it one in the first place.  Nothing is
+      # installed from the six either: the harness puts each checkout's lib/ on
+      # @INC itself.
+      - name: Install what the six load
+        shell: bash
+        run: |
+          set -eu
+          cpanm --notest --quiet \
+            CHI HTML::Entities HTTP::Request JSON::MaybeXS LWP::UserAgent \
+            LWP::Protocol::https Object::Configure Params::Get \
+            Params::Validate::Strict Readonly URI
+
+      - name: Run the fuzz
+        working-directory: workspace/Geo-Coder-Free
+        shell: bash
+        run: |
+          set -u
+          status=0
+          # The report is Markdown, so it goes to the job summary as well: the
+          # class or the value a sibling stopped agreeing on is the whole
+          # finding, and it should not have to be read out of a log that has
+          # scrolled away.  The failures themselves go to stderr, which stays in
+          # the log.
+          perl scripts/location-predicate-fuzz.pl --iterations 20000 --check \
+            > "$RUNNER_TEMP/location-predicates.md" \
+            2> "$RUNNER_TEMP/location-predicates.err" || status=$?
+          cat "$RUNNER_TEMP/location-predicates.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/location-predicates.err" >&2
+          exit "$status"

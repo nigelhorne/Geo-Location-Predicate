@@ -1,4 +1,4 @@
-package Geo::Coder::Free::Validate;
+package Geo::Location::Predicate;
 
 # The one definition of what counts as a location.
 #
@@ -14,10 +14,17 @@ package Geo::Coder::Free::Validate;
 # declare - a recommendation in their META, which an installer fetches by
 # default.
 #
-# The name is unchanged on purpose.  Every caller says
-# Geo::Coder::Free::Validate::_valid_location(), including the facade and both of
-# its backends, and a release that renamed it would break each of them for no
-# gain; what moved is which distribution ships the file.
+# The name says the question, not the namespace it was written in.  It is a
+# predicate - could this string be a location? - and not a validator, which
+# would promise that the string is a correct address or a real place; the answer
+# is a policy about whether a lookup is worth making, so a numeric geocoder may
+# want it to say true where this says false.  Geo::Location::* is where a
+# location is looked at rather than where one is looked up (that is Geo::Coder::*,
+# ::CA and ::OSM being geocoders for a service each), and it sits beside
+# Geo::Location::Point for a caller who already has coordinates in hand.  Every
+# caller says Geo::Location::Predicate::_valid_location(), including the facade
+# and both of its backends; the sub keeps its private name so that it does not
+# compete with the public spelling the facade already offers.
 #
 # The class - not the file - is the unit: L<Geo::Coder::Free> calls this rule and
 # depends on this distribution, and the six call it when it is installed and fall
@@ -33,7 +40,7 @@ our @EXPORT_OK = qw(_valid_location);
 
 =head1 NAME
 
-Geo::Coder::Free::Validate - The rule that decides whether a string could be a location
+Geo::Location::Predicate - The rule that decides whether a string could be a location
 
 =head1 VERSION
 
@@ -45,7 +52,7 @@ our $VERSION = '0.01';
 
 =head1 SYNOPSIS
 
-    use Geo::Coder::Free::Validate qw(_valid_location);
+    use Geo::Location::Predicate qw(_valid_location);
 
     if(_valid_location($row->{'place'})) {
         # worth a lookup
@@ -72,6 +79,11 @@ plus C<undef>, the empty string and a reference.  Anything with a non-digit
 character in it counts, C<'3.14'> and C<'-'> included - including a comma, which
 is why a rejected C<'0044'> is a column mistake rather than a missing place.
 
+The name is a predicate, not a promise: C<true> does not mean the place exists,
+and a geocoder for a service with numeric identifiers may want a different
+policy, which is why this one is asked only when it is installed rather than
+being a hard prerequisite of the six.
+
 A caller should not need this module: L<Geo::Coder::Free> has the same rule in
 public as C<< $geo->valid_location($row->{'place'}) >>, which is what a batch
 caller should pre-filter with.  The sub is exported under its private name
@@ -95,7 +107,7 @@ Whether the string handed to it could be a location.  False for C<undef>, for
 C<''>, for a reference and for a string of digits only; true for anything else,
 including a single punctuation character.
 
-    use Geo::Coder::Free::Validate qw(_valid_location);
+    use Geo::Location::Predicate qw(_valid_location);
 
     if(_valid_location($row->{'place'})) {
         # worth a lookup

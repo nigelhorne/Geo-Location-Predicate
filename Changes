@@ -1,9 +1,9 @@
-Revision history for Geo-Coder-Free-Validate
+Revision history for Geo-Location-Predicate
 
 0.01	Sun Oct 18 2026
 	First release: the location rule moved out of Geo-Coder-Free 0.48.
 
-	Geo::Coder::Free::Validate has been a module of Geo-Coder-Free since the rule
+	Geo::Location::Predicate has been a module of Geo-Coder-Free since the rule
 	was given one home there; it is a distribution of its own now, so that the
 	six geocoders that ask it - Geo::Coder::CA, DataScienceToolkit, GeoApify,
 	List, Postcodes and XYZ - can depend on one predicate instead of on the whole
@@ -13,3 +13,13 @@ Revision history for Geo-Coder-Free-Validate
 	declare it under recommends in their META - a recommendation for runtime, with
 	a test requirement, because their suites assert its answer - and look for it
 	when they first need it, refusing a reference when it is not installed.
+
+	The repository carries the gate on the rule itself now:
+	.github/workflows/location-predicates.yml assembles Geo-Coder-Free's harness and
+	the six geocoders, and runs the fuzz against the rule in the branch on a push
+	here and on a pull request, so a change to the rule that disagrees with the six
+	fails before the merge.  The daily run in Geo-Coder-Free cannot see such a
+	change: a workflow only runs in the repository its event happened in.  The
+	harness is what makes the branch the tree under test - it puts the checkouts'
+	lib/ ahead of everything on @INC and refuses to run when the file that loaded is
+	not this distribution's.

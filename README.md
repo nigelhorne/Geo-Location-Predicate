@@ -1,6 +1,6 @@
 ## Name
 
-Geo::Coder::Free::Validate - The rule that decides whether a string could be a location
+Geo::Location::Predicate - The rule that decides whether a string could be a location
 
 ## Version
 
@@ -9,7 +9,7 @@ Version 0.01
 ## Synopsis
 
 ```perl
-use Geo::Coder::Free::Validate qw(_valid_location);
+use Geo::Location::Predicate qw(_valid_location);
 
 if(_valid_location($row->{'place'})) {
     # worth a lookup
@@ -37,6 +37,11 @@ plus `undef`, the empty string and a reference.  Anything with a non-digit
 character in it counts, `'3.14'` and `'-'` included - including a comma, which
 is why a rejected `'0044'` is a column mistake rather than a missing place.
 
+The name is a predicate, not a promise: `true` does not mean the place exists,
+and a geocoder for a service with numeric identifiers may want a different
+policy, which is why this one is asked only when it is installed rather than
+being a hard prerequisite of the six.
+
 A caller should not need this module: [Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree) has the same rule in
 public as `$geo->valid_location($row->{'place'})`, which is what a batch
 caller should pre-filter with.  The sub is exported under its private name
@@ -61,7 +66,7 @@ Whether the string handed to it could be a location.  False for `undef`, for
 including a single punctuation character.
 
 ```perl
-use Geo::Coder::Free::Validate qw(_valid_location);
+use Geo::Location::Predicate qw(_valid_location);
 
 if(_valid_location($row->{'place'})) {
     # worth a lookup
