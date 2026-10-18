@@ -1,0 +1,15 @@
+Revision history for Geo-Coder-Free-Validate
+
+0.01	Sun Oct 18 2026
+	First release: the location rule moved out of Geo-Coder-Free 0.48.
+
+	Geo::Coder::Free::Validate has been a module of Geo-Coder-Free since the rule
+	was given one home there; it is a distribution of its own now, so that the
+	six geocoders that ask it - Geo::Coder::CA, DataScienceToolkit, GeoApify,
+	List, Postcodes and XYZ - can depend on one predicate instead of on the whole
+	facade, its backends, its databases and its cache.  The module name, the sub
+	and its answers are unchanged: what moved is which distribution ships the
+	file.  Geo::Coder::Free depends on this distribution from 0.48, and the six
+	declare it under recommends in their META - a recommendation for runtime, with
+	a test requirement, because their suites assert its answer - and look for it
+	when they first need it, refusing a reference when it is not installed.

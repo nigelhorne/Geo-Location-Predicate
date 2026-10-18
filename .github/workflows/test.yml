@@ -1,0 +1,41 @@
+---
+# See https://github.com/actions/virtual-environments
+#
+# The rule has no prerequisites, so what this job installs is the test
+# machinery: the suite is the rule's own answers, and the author tests are the
+# packaging ones (manifest, pod, strict).
+name: Test Code
+on:
+  push:
+    branches:
+      - '*'
+    tags-ignore:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        perl: ['5.40', '5.36']
+    name: Perl ${{ matrix.perl }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup perl
+        uses: shogo82148/actions-setup-perl@v1.44.0
+        with:
+          perl-version: ${{ matrix.perl }}
+      - run: perl -V
+      - name: Install Dependencies
+        run: |
+          cpanm -iqn --skip-satisfied File::Spec ExtUtils::MakeMaker
+          cpanm -iqn --skip-satisfied Test::Most Test::DescribeMe Test::Needs
+          cpanm -iqn --skip-satisfied Test::Pod Test::Strict Test::CheckManifest
+          cpanm -iqn --skip-satisfied --installdeps --notest .
+      - name: Run Tests
+        run: prove -l -b t
+        env:
+          AUTHOR_TESTING: 1
+          AUTOMATED_TESTING: 1
