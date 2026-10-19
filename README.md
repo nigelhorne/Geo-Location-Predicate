@@ -8,117 +8,194 @@ Version 0.02
 
 ## Synopsis
 
+Ask the question before you spend time on a lookup:
+
 ```perl
 use Geo::Location::Predicate qw(_valid_location);
 
 if(_valid_location($row->{'place'})) {
-    # worth a lookup
+    # The value could be a place, so it is worth a lookup
 }
+```
+
+Remove the rows that cannot be places, before a batch of lookups:
+
+```perl
+use Geo::Location::Predicate qw(_valid_location);
+
+my @to_look_up = grep { _valid_location($_->{'place'}) } @rows;
+```
+
+Call the rule by its full name, without importing anything:
+
+```perl
+require Geo::Location::Predicate;
+
+my $ok = Geo::Location::Predicate::_valid_location($text);
+```
+
+Use the rule only when it is installed, and fall back to a weaker test when it
+is not.  This is what the six sibling geocoders do:
+
+```perl
+my $is_location = eval { require Geo::Location::Predicate; 1 }
+    ? \&Geo::Location::Predicate::_valid_location
+    : sub { defined($_[0]) && !ref($_[0]) && length($_[0]) };
+
+return unless $is_location->($location);
+```
+
+Clean the value first, if it comes from a file:
+
+```perl
+chomp(my $place = <$fh>);
+$place =~ s/^\s+|\s+$//g;     # remove spaces at the start and the end
+next unless _valid_location($place);
 ```
 
 ## Description
 
-One question: could this string be a location at all?
+This module answers one question: **could this value be a location?**
 
-It is asked in three places by [Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree) - of a `location` and of a
-`scantext` before it queries a backend, and by
-[Geo::Coder::Free::MaxMind](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree%3A%3AMaxMind) and [Geo::Coder::Free::OpenAddresses](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree%3A%3AOpenAddresses) of what a
-caller hands them directly - and by the six sibling geocoders that look a place
-up in their own service.  The rule lives here rather than being written out at
-each of those places, so they cannot drift apart on which strings are worth
-looking up: a string the facade refuses must not be accepted by a backend, and
-the other way round.
+The answer is "no" (`0`) for:
 
-It is a cheap syntactic test and nothing more.  A `true` answer means the string
-is not disqualified, **not** that a backend knows it: `'Ramsgate, Kent'` is a
-location and may still find nothing.  What is disqualified is a string of digits
-only, which is what a numeric column holds when the wrong column has been read,
-plus `undef`, the empty string and a reference.  Anything with at least one
-non-digit character in it counts, `'3.14'`, `'-'` and `' '` included: the
-rule refuses only what is certainly a number, so a rejected `'0044'` is a
-column mistake rather than a place nobody has heard of.
+- `undef` (no value)
+- the empty string `''`
+- a reference of any kind (an array, a hash, an object, ...)
+- a string that contains only digits, for example `'0044'`
 
-"Digit" means a Unicode decimal digit (`\p{Nd}`), not only `0` to `9`, so
-`"\x{0661}\x{0662}"` (Arabic-Indic one-two) is refused as `'12'` is.  The
-answer does not depend on the locale, on whether the string carries the UTF-8
-flag, or on a `use locale` in the caller's scope.
+The answer is "yes" (`1`) for every other value.  The value needs only one
+character that is not a digit.  So `'London'`, `'Ramsgate, Kent'`, `'3.14'`,
+`'-'` and even `' '` (one space) all get "yes".
 
-The name is a predicate, not a promise: `true` does not mean the place exists,
-and a geocoder for a service with numeric identifiers may want a different
-policy, which is why this one is asked only when it is installed rather than
-being a hard prerequisite of the six.
+### Why This Rule Exists
 
-A caller should not need this module: [Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree) has the same rule in
-public as `$geo->valid_location($row->{'place'})`, which is what a batch
-caller should pre-filter with.  The sub is exported under its private name
-because the facade, its backends and the six are the only intended callers, and
-because its public spelling already exists and has a name a caller can rely on.
+A geocoder often reads a table, such as a CSV file.  When a program reads the
+wrong column by mistake, it gets numbers (an ID, a phone number, a count)
+instead of place names.  A number made only of digits is never a place name,
+so a lookup for it wastes time and may return a wrong match.  This rule stops
+those lookups.
 
-Installing this distribution is optional for the six siblings and required by
-[Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree).  Each sibling declares it under `recommends` in its META
-rather than as a prerequisite, and looks for it when it first needs it rather
-than when it loads, so importing a sibling reads no file it may not have.  A
-sibling without it still refuses a reference, which is the case none of them
-could test for on its own, but it cannot answer the question about a numeric
-column read by mistake - so the rule is asked when it is there, and what each
-sibling does without it is documented by that sibling.
+### What "Yes" Means
+
+"Yes" does **not** mean that the place exists.  It means only that the value is
+not obviously wrong.  `'Ramsgate, Kent'` gets "yes", and a geocoder may still
+find nothing for it.  The test only looks at the characters.  It does not use a
+database or the network, so it is very fast.
+
+### Who Uses It
+
+[Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree) asks this question before it searches.  Its two backends,
+[Geo::Coder::Free::MaxMind](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree%3A%3AMaxMind) and [Geo::Coder::Free::OpenAddresses](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree%3A%3AOpenAddresses), ask it too.
+Six other geocoders also ask it: Geo::Coder::CA, Geo::Coder::DataScienceToolkit,
+Geo::Coder::GeoApify, Geo::Coder::List, Geo::Coder::Postcodes and
+Geo::Coder::XYZ.
+
+All of them use this one copy of the rule.  This is on purpose: if each one had
+its own copy, the copies could change in different ways, and one program could
+accept a value that another refuses.
+
+[Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree) needs this module.  For the six other geocoders it is
+optional: they list it as "recommended", and they load it only when they first
+need it.  Without it, they can still refuse a reference, but they cannot refuse
+a string of digits.
+
+This module has no dependencies outside core Perl.  That is why it is a
+separate distribution: the six geocoders can recommend it without also
+installing Geo::Coder::Free and its databases.
+
+### Should I Call It?
+
+Usually not.  If you use [Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree), call its public method
+`$geo->valid_location($place)`, which gives the same answer.  The name of
+this function starts with `_` because it is meant for the geocoders listed
+above.  But the name will not change, because those geocoders depend on it.
 
 ## Subroutines/Methods
 
 ### \_Valid\_Location
 
-Purpose: say whether a value could be a location, so that a caller can skip a
-lookup that cannot succeed.
+```perl
+my $answer = _valid_location($value);
+```
 
-Args: one value, of any kind.  Anything after the first argument is ignored.
+- Purpose
 
-Returns: `1` if the value is a non-reference scalar holding at least one
-non-digit character; `0` otherwise - for `undef`, `''`, a reference
-(blessed or not, overloaded or not) and a string of digits only.  Always
-exactly one value, so it is safe in list context.
+    Says whether a value could be a location, so that the caller can skip a lookup
+    that cannot work.
 
-Side effects: none.  It does not croak, warn, change its argument, `$_`,
-`$!`, `$@` or the caller's `$1`.
+- Arguments
 
-Usage: call it as a function, not a method; there is no object.
+    One value of any kind.  If you give more than one argument, only the first is
+    used.  If you give no argument, it is treated as `undef`.
+
+- Returns
+
+    The number `1` ("yes, it could be a location") if the value is a plain string
+    or number and has at least one character that is not a digit.
+
+    The number `0` ("no") in every other case.
+
+    It always returns exactly one value, also in list context.  So it is safe to
+    use inside `map`.
+
+- Side effects
+
+    None.  It does not die and does not warn, whatever you give it.  It does not
+    change its argument, `$_`, `$!`, `$@`, or the match variables (`$1` and so
+    on) of the caller.  It does not call the stringify (`""`) overload of an
+    object.
+
+- Usage
+
+    Call it as a plain function, not as a method.  There is no object and no
+    `new()`.  Import it by name, because it is not exported by default:
+
+    ```perl
+    use Geo::Location::Predicate qw(_valid_location);
+    ```
 
 #### Example
 
 ```perl
 use Geo::Location::Predicate qw(_valid_location);
 
-# Skip rows whose 'place' column holds a postcode-less number by mistake
-my @worth_looking_up = grep { _valid_location($_->{'place'}) } @rows;
+_valid_location('Ramsgate, Kent');  # 1 - a place name
+_valid_location('GB');              # 1 - a country code
+_valid_location('3.14');            # 1 - the '.' is not a digit
+_valid_location(' ');               # 1 - a space is not a digit
+_valid_location('0044');            # 0 - only digits
+_valid_location(44);                # 0 - a number is read as '44'
+_valid_location(-44);               # 1 - a number is read as '-44'
+_valid_location('');                # 0 - empty
+_valid_location(undef);             # 0 - no value
+_valid_location(['London']);        # 0 - a reference
 
-_valid_location('Ramsgate, Kent');  # 1
-_valid_location('3.14');            # 1 - has a '.'
-_valid_location('0044');            # 0 - digits only
-_valid_location('');                # 0
-_valid_location(undef);             # 0
-_valid_location(['London']);        # 0 - a reference, never dereferenced
+# Keep only the rows that could be places
+my @to_look_up = grep { _valid_location($_->{'place'}) } @rows;
 ```
 
 #### Api Specification
 
 ##### Input
 
-Positional, in [Params::Validate::Strict](https://metacpan.org/pod/Params%3A%3AValidate%3A%3AStrict) notation.  Any value is accepted:
-the predicate's job is to answer for a bad value, not to reject it, so nothing
-here can fail validation.
+One positional argument, written in [Params::Validate::Strict](https://metacpan.org/pod/Params%3A%3AValidate%3A%3AStrict) form.  Every
+value is accepted, so validation never fails: the job of this function is to
+answer "no" for a bad value, not to reject it.
 
 ```perl
 [
     {
         name     => 'location',
-        type     => 'any',      # scalar, undef or reference
-        optional => 1,          # no argument is the same as undef
+        type     => 'any',      # a string, a number, undef or a reference
+        optional => 1,          # no argument means undef
     },
 ]
 ```
 
 ##### Output
 
-In [Return::Set](https://metacpan.org/pod/Return%3A%3ASet) notation:
+Written in [Return::Set](https://metacpan.org/pod/Return%3A%3ASet) form:
 
 ```perl
 {
@@ -130,16 +207,167 @@ In [Return::Set](https://metacpan.org/pod/Return%3A%3ASet) notation:
 
 #### Messages
 
-None.  The routine never croaks, carps, dies or warns, whatever it is given;
-a refusal is the return value `0`.
+The function itself never gives an error or a warning.  The only messages come
+from Perl when the module is loaded in a wrong way:
 
-#### Formal Specification
+```perl
++------------------------------------+----------------------+----------------------+
+| Message                            | Meaning              | What to do           |
++------------------------------------+----------------------+----------------------+
+| "NAME" is not exported by the      | You asked to import  | Import only          |
+| Geo::Location::Predicate module    | a name that does not | _valid_location      |
+| Can't continue after import errors | exist, for example   | (with the leading    |
+|                                    | valid_location       | underscore)          |
++------------------------------------+----------------------+----------------------+
+| Geo::Location::Predicate version N | You asked for a      | Install a newer      |
+| required--this is only version M   | newer version than   | version, or ask for  |
+|                                    | the one installed    | a lower one          |
++------------------------------------+----------------------+----------------------+
+| Can't locate                       | The module is not    | Install it, or load  |
+| Geo/Location/Predicate.pm in @INC  | installed            | it inside eval {} as |
+|                                    |                      | in the SYNOPSIS      |
++------------------------------------+----------------------+----------------------+
+| Undefined subroutine               | You called the       | Import it by name,   |
+| &main::_valid_location called      | function without     | or use its full name |
+|                                    | importing it         |                      |
++------------------------------------+----------------------+----------------------+
+```
+
+## Encoding
+
+The function works on Perl **characters**, not on bytes.
+
+- Plain ASCII text
+
+    Fully supported.  The digits are `0` to `9`.
+
+- Non-ASCII text and other scripts (UTF-8)
+
+    Fully supported, if the text is **decoded** first (for example with
+    `open(my $fh, '<:encoding(UTF-8)', $file)` or `Encode::decode('UTF-8', $bytes)`).
+    Names such as `"M\x{fc}nchen"` (Munich) or `"\x{6771}\x{4eac}"` (Tokyo) get
+    "yes".
+
+- Digits from other scripts
+
+    A "digit" is any Unicode decimal digit, not only `0` to `9`.  So
+    `"\x{0661}\x{0662}"` (Arabic-Indic 1 and 2) and `"\x{FF11}\x{FF12}"` (full-width
+    1 and 2) get "no", the same as `'12'`.  Superscript digits such as
+    `"\x{b2}"` are **not** decimal digits in Unicode, so they get "yes".
+
+- Emoji
+
+    Supported.  An emoji is not a digit, so a string that contains one gets "yes".
+
+- Bytes that were not decoded
+
+    **Not** safe.  See ["COMMON PITFALLS"](#common-pitfalls).
+
+The answer does not depend on the locale (`LC_ALL`, `LANG`), on
+`use locale` in your code, or on whether Perl stores the string internally as
+UTF-8.
+
+## Common Pitfalls
+
+- Undecoded UTF-8 bytes give a different answer
+
+    If you read text as raw bytes, digits from other scripts become several bytes
+    that are not digits.  So `_valid_location("\x{0661}\x{0662}")` is `0`, but the
+    same text as undecoded UTF-8 bytes, `"\xd9\xa1\xd9\xa2"`, is `1`.  Decode your
+    input before you ask.
+
+- A newline or a space makes the answer "yes"
+
+    `"0044\n"` and `' 0044 '` get "yes", because a newline and a space are not
+    digits.  This often happens when you forget `chomp` after reading a line, or
+    when a field has padding.  Remove spaces before you ask (see the SYNOPSIS).
+    A string of only spaces, such as `' '`, also gets "yes".
+
+- `undef` is "no", not an error
+
+    `undef` does not cause a warning or an error; it gets `0`.  So you cannot use
+    this function to find out whether a value is missing; it only tells you that
+    you should not look it up.  A missing argument is also `undef`.
+
+- Numbers are judged by how Perl writes them
+
+    The function looks at the number as text.  `44` gets "no", but `-44` gets
+    "yes" (because of the `-`), and `0.5` gets "yes" (because of the `.`).  The
+    number `1e3` is written by Perl as `1000`, so it gets "no", but the string
+    `'1e3'` gets "yes".
+
+- Objects always get "no"
+
+    An object gets `0` even if it turns into a place name when you print it.
+    Turn it into a string yourself first:
+
+    ```
+    _valid_location("$address_object");
+    ```
+
+- A hash or a list as the argument
+
+    `_valid_location(%row)` or `_valid_location(@list)` only looks at the first
+    item, and gives no warning.  Pass one value.
+
+- "Yes" does not mean "found"
+
+    "Yes" only means "not obviously wrong".  Always check the result of the
+    lookup itself.
+
+## Limitations
+
+These are design decisions.  Each one can be argued with, but changing any of
+them would change the answer for all nine programs that use this rule at the
+same time, so they are listed here and not changed silently.
+
+- White space counts as a non-digit
+
+    See ["COMMON PITFALLS"](#common-pitfalls).  A stricter rule would be `/[^\d\s]/`: "at least one
+    character that is not a digit and not white space".
+
+- The rule sees the text, not the number
+
+    It refuses "only digits", not "a number".  See ["COMMON PITFALLS"](#common-pitfalls).
+
+- Objects are refused even when they print as a place
+
+    The function does not turn an object into a string, so that a broken overload
+    cannot make it die.
+
+- The name looks private
+
+    The function is public and exported, but its name starts with `_`.  Tools such
+    as [Pod::Coverage](https://metacpan.org/pod/Pod%3A%3ACoverage) treat it as private.  The name cannot change, because other
+    modules call it by that name.
+
+- Extra arguments are ignored
+
+    There is no warning when more than one argument is given.
+
+## See Also
+
+[Geo::Coder::Free](https://metacpan.org/pod/Geo%3A%3ACoder%3A%3AFree), [Geo::Location::Point](https://metacpan.org/pod/Geo%3A%3ALocation%3A%3APoint)
+
+## Author
+
+Nigel Horne, `<njh at nigelhorne.com>`
+
+## Formal Specification
+
+This section describes the function in the Z notation.  You do not need it to
+use the module.
+
+### \_Valid\_Location
+
+The module keeps no state, so there is no state schema and no `Delta`
+operation: the function only reads its input.
 
 ```
 [VALUE, CHAR]
 
-STRING  : ℙ VALUE                 -- defined non-reference scalars
-chars   : STRING → seq CHAR       -- the string as perl stringifies it
+STRING  : ℙ VALUE                 -- defined values that are not references
+chars   : STRING → seq CHAR       -- the value as Perl writes it as text
 DIGIT   : ℙ CHAR                  -- Unicode general category Nd
 
 ┌─ ValidLocation ─────────────────────────────────
@@ -152,49 +380,72 @@ DIGIT   : ℙ CHAR                  -- Unicode general category Nd
 └─────────────────────────────────────────────────
 ```
 
-The empty string needs no clause of its own: `dom <> = ∅`, so the
-existential is false and `result! = 0`.
+The empty string needs no rule of its own: `dom <> = ∅`, so no `i`
+exists, and `result! = 0`.
 
-## Limitations
+## State Diagram
 
-These are deliberate, but each one is a place where the rule can be argued
-with.  Changing any of them changes the answer for all eight callers at once,
-so they are listed rather than silently fixed.
+The module has no data that changes between calls.  So it has only two kinds
+of state: the state of the module in a program (diagram 1), and the steps of
+one call (diagram 2).  A call always starts and ends in the same module state.
 
-- Whitespace is a non-digit
+Diagram 1 - the module in a program:
 
-    `' '`, `"0044\n"` and `' 0044 '` are all accepted.  The last two are exactly
-    the column mistake the rule exists to catch, when a line is not `chomp`ed or
-    a fixed-width field is padded.  A caller reading such data should trim it
-    first.  A stricter rule would be `/[^\d\s]/`.
+```perl
++--------------+  use / require              +--------------+
+|  NOT LOADED  |---------------------------->|    LOADED    |
++--------------+  (file compiled once;       +--------------+
+       |           $VERSION set)                    |
+       |                                            | import qw(_valid_location)
+       | require fails                              | (the caller gets the name
+       | (not installed)                            |  _valid_location; no other
+       v                                            |  name is added)
++--------------+                                    v
+| UNAVAILABLE  |                             +--------------+
++--------------+                             |   IMPORTED   |<--+
+  the caller uses                            +--------------+   |
+  its own fallback                                  |           |
+  (see SYNOPSIS)                                    | _valid_   | returns 1 or 0;
+                                                    | location()| nothing changes
+                                                    +-----------+
 
-- The rule sees the stringification, not the number
+import of an unknown name, or a too-high version:
+  LOADED --> compile error (see MESSAGES); the program does not start
+```
 
-    `-44` (a number) is accepted because it stringifies as `'-44'`, while `44`
-    is refused; the literal `1e3` stringifies as `'1000'` and is refused, while
-    the string `'1e3'` is accepted.  The rule refuses "digits only", not
-    "numeric".
+Diagram 2 - one call of \_valid\_location($value):
 
-- Objects are refused even when they stringify to a place
+```
++-----------+
+|  CALLED   |  $value is copied; the caller's value is not touched
++-----------+
+      |
+      | defined($value)?
+      +------- no ------------------------------+
+      | yes                                     |
+      v                                         |
++-----------+                                   |
+|  DEFINED  |                                   |
++-----------+                                   |
+      |                                         |
+      | ref($value)?                            |
+      +------- yes (no overload is called) -----+
+      | no                                      |
+      v                                         |
++-----------+                                   |
+|  STRING   |                                   |
++-----------+                                   |
+      |                                         |
+      | contains a non-digit (/\D/)?            |
+      +------- no (only digits, or '') ---------+
+      | yes                                     |
+      v                                         v
++-----------+                             +-----------+
+| ACCEPTED  |  returns 1                  |  REFUSED  |  returns 0
++-----------+                             +-----------+
 
-    An object with a `""` overload (a URI, an address object) is refused as any
-    other reference is.  Stringifying it is the caller's job, and it is not done
-    here so that an overload cannot die inside the predicate.
-
-- The name is private
-
-    The sub is a public, exported interface with a private-looking name.
-    [Pod::Coverage](https://metacpan.org/pod/Pod%3A%3ACoverage) and [Test::Pod::Coverage](https://metacpan.org/pod/Test%3A%3APod%3A%3ACoverage) will skip it, and a reader may
-    assume it can change.  It cannot: eight distributions call it by that name.
-
-- Extra arguments are ignored
-
-    `_valid_location(%row)` asks about the first key of the hash, in an
-    unpredictable order, and says nothing about the mistake.
-
-## Author
-
-Nigel Horne, `<njh at nigelhorne.com>`
+Side effects of every step: none.
+```
 
 ## License and Copyright
 

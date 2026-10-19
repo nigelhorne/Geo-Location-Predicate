@@ -3,7 +3,7 @@
 requires 'perl', '5.008003';
 
 on 'configure' => sub {
-	requires 'ExtUtils::MakeMaker', '6.64';
+	requires 'ExtUtils::MakeMaker', '6.64';   # First to understand TEST_REQUIRES
 };
 
 on 'test' => sub {
