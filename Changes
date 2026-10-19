@@ -1,6 +1,6 @@
 Revision history for Geo-Location-Predicate
 
-0.02
+0.02	Sun Oct 18 08:56:13 PM EDT 2026
 	MIN_PERL_VERSION is 5.8.3, the first perl whose Exporter supports
 	"use Exporter qw(import)"; 0.01 claimed 5.8.0 and could not load there.
 	META licence is gpl_2, matching LICENSE (it said open_source).
