@@ -16,15 +16,18 @@
 # against the six before it merges, rather than being caught by the daily run of
 # another repository after it has.
 #
+# Each of the six carries the same job in its own repository, with --sibling
+# naming it, so drift in one of them is caught by the pipeline that would have to
+# fix it; this one is the gate for a change to the rule, and it grades all six.
+#
 # scripts/location-predicate-fuzz.pl is Geo-Coder-Free's harness, so that checkout
 # is assembled here too, at its default branch: what is under test in a pull
 # request to this distribution is the rule, not the harness.  The harness is run
-# the way it documents - a sibling's verdict on a scalar or undef that differs
-# from the rule's fails the run and names the class or the value, a reference
-# disagreement is reported without failing it - and it puts the eight checkouts'
-# lib/ on @INC itself, which is how the rule in the branch is the one that answers
-# instead of the released copy; it fails rather than run if that is not the copy
-# that loaded.
+# the way it documents - a sibling's verdict on any value, a reference included,
+# that differs from the rule's fails the run and names the class or the value -
+# and it puts the eight checkouts' lib/ on @INC itself, which is how the rule in
+# the branch is the one that answers instead of the released copy; it fails
+# rather than run if that is not the copy that loaded.
 name: Location predicates
 
 on:

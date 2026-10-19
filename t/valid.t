@@ -78,4 +78,68 @@ is_deeply(\@Geo::Location::Predicate::EXPORT_OK, ['_valid_location'],
 is(refaddr(\&main::_valid_location), refaddr(\&Geo::Location::Predicate::_valid_location),
 	'the imported name and the module\'s sub are the same code reference');
 
+# The answer is exactly 1 or 0, not merely true or false: a sibling may compare
+# it with == or store it, and the fuzz harness compares verdicts by value.
+subtest 'the answer is exactly 1 or 0, and one value' => sub {
+	is(_valid_location('London'), 1, 'a location answers 1');
+	is(_valid_location('0044'), 0, 'digits answer 0');
+	is(_valid_location(undef), 0, 'undef answers 0, not undef');
+	is(_valid_location(), 0, 'no argument at all answers 0');
+
+	# A bare "return;" would give () in list context, which is false in scalar
+	# context but empty in a list - so a list of answers would lose entries.
+	my @answers = map { _valid_location($_) } ('London', '0044', undef);
+	is_deeply(\@answers, [1, 0, 0], 'one answer per value in list context');
+};
+
+# Cases where the rule is debatable.  They are pinned here so that a change of
+# policy is a change to this file as well, and not an accident.  See
+# LIMITATIONS in the POD.
+subtest 'whitespace and stringification are taken as they are' => sub {
+	is(_valid_location("0044\n"), 1, 'a line that was not chomped is accepted');
+	is(_valid_location(' 0044 '), 1, 'a padded field is accepted');
+	is(_valid_location(-44), 1, 'a negative number stringifies with a minus sign');
+	is(_valid_location(1e3), 0, 'a numeric literal is judged by its stringification');
+};
+
+# Which bytes perl stores a string in must not change the answer: the same
+# string, upgraded to UTF-8 internally, is the same question.
+subtest 'the UTF-8 flag does not change the answer' => sub {
+	for my $value ('0044', 'London', "caf\x{e9}") {
+		my $upgraded = $value;
+		utf8::upgrade($upgraded);
+		is(_valid_location($upgraded), _valid_location($value), "'$value' upgraded or not");
+	}
+};
+
+# An object is refused without being stringified, so an overload that dies
+# cannot escape from the predicate.
+{
+	package Geo::Location::Predicate::Test::Place;
+	use overload '""' => sub { die 'stringified' }, fallback => 1;
+}
+
+subtest 'an object is not stringified' => sub {
+	my $place = bless({}, 'Geo::Location::Predicate::Test::Place');
+	my $answer;
+	lives_ok(sub { $answer = _valid_location($place) }, 'an overload that dies is not called');
+	is($answer, 0, 'and the object is refused');
+};
+
+# The predicate is called in the middle of a caller's own work: it must leave
+# the caller's argument, match variables and $_ as they were.
+subtest 'no side effects on the caller' => sub {
+	my $value = '0044';
+	_valid_location($value);
+	is($value, '0044', 'the argument is not changed');
+
+	'Ramsgate, Kent' =~ /^(\w+)/;
+	_valid_location('London');
+	is($1, 'Ramsgate', "the caller's \$1 survives a match inside the rule");
+
+	local $_ = 'unchanged';
+	_valid_location('London');
+	is($_, 'unchanged', '$_ is not used');
+};
+
 done_testing();

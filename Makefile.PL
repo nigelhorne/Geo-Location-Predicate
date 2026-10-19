@@ -17,13 +17,20 @@ WriteMakefile(
 	VERSION_FROM => 'lib/Geo/Location/Predicate.pm',
 	ABSTRACT_FROM => 'lib/Geo/Location/Predicate.pm',
 	AUTHOR => 'Nigel Horne <njh@nigelhorne.com>',
-	LICENSE => 'GPL',
-	MIN_PERL_VERSION => '5.008',
+	LICENSE => 'gpl_2',	# The LICENSE file is GPL v2; 'GPL' is written to META as 'open_source'
+	# use Exporter qw(import) needs Exporter 5.57, first shipped with 5.8.3
+	MIN_PERL_VERSION => '5.008003',
+	CONFIGURE_REQUIRES => {
+		'ExtUtils::MakeMaker' => '6.64',	# First to understand TEST_REQUIRES
+	},
 	# The rule needs nothing but perl: it is one sub with one pattern, which is
 	# why it is a distribution of its own rather than a reason to install the
 	# facade and its databases.
 	PREREQ_PM => {},
 	TEST_REQUIRES => {
+		'Errno' => 0,
+		'POSIX' => 0,
+		'Scalar::Util' => 0,
 		'Test::DescribeMe' => 0,
 		'Test::Most' => 0,
 		'Test::Needs' => 0,

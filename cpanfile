@@ -1,8 +1,15 @@
 # Generated from Makefile.PL using makefilepl2cpanfile
 
-requires 'perl', '5.008';
+requires 'perl', '5.008003';
+
+on 'configure' => sub {
+	requires 'ExtUtils::MakeMaker', '6.64';
+};
 
 on 'test' => sub {
+	requires 'Errno';
+	requires 'POSIX';
+	requires 'Scalar::Util';
 	requires 'Test::DescribeMe';
 	requires 'Test::Most';
 	requires 'Test::Needs';

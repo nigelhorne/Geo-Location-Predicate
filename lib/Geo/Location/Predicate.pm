@@ -29,10 +29,18 @@ package Geo::Location::Predicate;
 # The class - not the file - is the unit: L<Geo::Coder::Free> calls this rule and
 # depends on this distribution, and the six call it when it is installed and fall
 # back to refusing a reference when it is not.
+#
+# Zero dependencies is the point of the distribution, so nothing beyond core
+# perl is loaded here - not Params::Validate::Strict, not Readonly, not
+# Sub::Private.  Each of those would become a prerequisite of eight
+# distributions to guard one line, and Sub::Private would stop the eight
+# callers from calling the rule at all.
 
 use strict;
 use warnings;
 
+# Exporter's import() is inherited by name rather than through @ISA; that form
+# needs Exporter 5.57, which is first in perl 5.8.3 (hence MIN_PERL_VERSION).
 use Exporter qw(import);
 our @EXPORT_OK = qw(_valid_location);
 
@@ -44,11 +52,11 @@ Geo::Location::Predicate - The rule that decides whether a string could be a loc
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -75,9 +83,15 @@ It is a cheap syntactic test and nothing more.  A C<true> answer means the strin
 is not disqualified, B<not> that a backend knows it: C<'Ramsgate, Kent'> is a
 location and may still find nothing.  What is disqualified is a string of digits
 only, which is what a numeric column holds when the wrong column has been read,
-plus C<undef>, the empty string and a reference.  Anything with a non-digit
-character in it counts, C<'3.14'> and C<'-'> included - including a comma, which
-is why a rejected C<'0044'> is a column mistake rather than a missing place.
+plus C<undef>, the empty string and a reference.  Anything with at least one
+non-digit character in it counts, C<'3.14'>, C<'-'> and C<' '> included: the
+rule refuses only what is certainly a number, so a rejected C<'0044'> is a
+column mistake rather than a place nobody has heard of.
+
+"Digit" means a Unicode decimal digit (C<\p{Nd}>), not only C<0> to C<9>, so
+C<"\x{0661}\x{0662}"> (Arabic-Indic one-two) is refused as C<'12'> is.  The
+answer does not depend on the locale, on whether the string carries the UTF-8
+flag, or on a C<use locale> in the caller's scope.
 
 The name is a predicate, not a promise: C<true> does not mean the place exists,
 and a geocoder for a service with numeric identifiers may want a different
@@ -103,28 +117,143 @@ sibling does without it is documented by that sibling.
 
 =head2 _valid_location
 
-Whether the string handed to it could be a location.  False for C<undef>, for
-C<''>, for a reference and for a string of digits only; true for anything else,
-including a single punctuation character.
+Purpose: say whether a value could be a location, so that a caller can skip a
+lookup that cannot succeed.
+
+Args: one value, of any kind.  Anything after the first argument is ignored.
+
+Returns: C<1> if the value is a non-reference scalar holding at least one
+non-digit character; C<0> otherwise - for C<undef>, C<''>, a reference
+(blessed or not, overloaded or not) and a string of digits only.  Always
+exactly one value, so it is safe in list context.
+
+Side effects: none.  It does not croak, warn, change its argument, C<$_>,
+C<$!>, C<$@> or the caller's C<$1>.
+
+Usage: call it as a function, not a method; there is no object.
+
+=head3 EXAMPLE
 
     use Geo::Location::Predicate qw(_valid_location);
 
-    if(_valid_location($row->{'place'})) {
-        # worth a lookup
+    # Skip rows whose 'place' column holds a postcode-less number by mistake
+    my @worth_looking_up = grep { _valid_location($_->{'place'}) } @rows;
+
+    _valid_location('Ramsgate, Kent');  # 1
+    _valid_location('3.14');            # 1 - has a '.'
+    _valid_location('0044');            # 0 - digits only
+    _valid_location('');                # 0
+    _valid_location(undef);             # 0
+    _valid_location(['London']);        # 0 - a reference, never dereferenced
+
+=head3 API SPECIFICATION
+
+=head4 INPUT
+
+Positional, in L<Params::Validate::Strict> notation.  Any value is accepted:
+the predicate's job is to answer for a bad value, not to reject it, so nothing
+here can fail validation.
+
+    [
+        {
+            name     => 'location',
+            type     => 'any',      # scalar, undef or reference
+            optional => 1,          # no argument is the same as undef
+        },
+    ]
+
+=head4 OUTPUT
+
+In L<Return::Set> notation:
+
+    {
+        type => 'integer',
+        min  => 0,
+        max  => 1,
     }
+
+=head3 MESSAGES
+
+None.  The routine never croaks, carps, dies or warns, whatever it is given;
+a refusal is the return value C<0>.
+
+=head3 FORMAL SPECIFICATION
+
+    [VALUE, CHAR]
+
+    STRING  : ℙ VALUE                 -- defined non-reference scalars
+    chars   : STRING → seq CHAR       -- the string as perl stringifies it
+    DIGIT   : ℙ CHAR                  -- Unicode general category Nd
+
+    ┌─ ValidLocation ─────────────────────────────────
+    │ location? : VALUE
+    │ result!   : {0, 1}
+    ├─────────────────────────────────────────────────
+    │ result! = 1 ⇔
+    │     location? ∈ STRING ∧
+    │     (∃ i : dom chars(location?) • chars(location?) i ∉ DIGIT)
+    └─────────────────────────────────────────────────
+
+The empty string needs no clause of its own: C<dom E<lt>E<gt> = ∅>, so the
+existential is false and C<result! = 0>.
 
 =cut
 
+# One expression, one exit: the three disqualifications are tested in order of
+# cost, and each short-circuits the next.  ref() comes before the match so that
+# an object is never stringified - its "" overload is not called and cannot die
+# or have side effects.  No length() test is needed: '' has no non-digit, so the
+# match already refuses it.
 sub _valid_location {
 	my $location = shift;
 
-	return 0 unless defined($location) && !ref($location) && length($location);
-	return $location =~ /\D/ ? 1 : 0;
+	return (defined($location) && !ref($location) && $location =~ /\D/) ? 1 : 0;
 }
 
 1;
 
 __END__
+
+=head1 LIMITATIONS
+
+These are deliberate, but each one is a place where the rule can be argued
+with.  Changing any of them changes the answer for all eight callers at once,
+so they are listed rather than silently fixed.
+
+=over 4
+
+=item * Whitespace is a non-digit
+
+C<' '>, C<"0044\n"> and C<' 0044 '> are all accepted.  The last two are exactly
+the column mistake the rule exists to catch, when a line is not C<chomp>ed or
+a fixed-width field is padded.  A caller reading such data should trim it
+first.  A stricter rule would be C</[^\d\s]/>.
+
+=item * The rule sees the stringification, not the number
+
+C<-44> (a number) is accepted because it stringifies as C<'-44'>, while C<44>
+is refused; the literal C<1e3> stringifies as C<'1000'> and is refused, while
+the string C<'1e3'> is accepted.  The rule refuses "digits only", not
+"numeric".
+
+=item * Objects are refused even when they stringify to a place
+
+An object with a C<""> overload (a URI, an address object) is refused as any
+other reference is.  Stringifying it is the caller's job, and it is not done
+here so that an overload cannot die inside the predicate.
+
+=item * The name is private
+
+The sub is a public, exported interface with a private-looking name.
+L<Pod::Coverage> and L<Test::Pod::Coverage> will skip it, and a reader may
+assume it can change.  It cannot: eight distributions call it by that name.
+
+=item * Extra arguments are ignored
+
+C<_valid_location(%row)> asks about the first key of the hash, in an
+unpredictable order, and says nothing about the mistake.
+
+=back
 
 =head1 AUTHOR
 
